@@ -47,7 +47,7 @@ exports.handler = async (event) => {
         let mailOptionsPrimary = {
             from: process.env.EMAIL_USER,
             to: 'info@hymglobal.co.uk',
-            subject: `New Contact Form Submission from ${name}`,
+            subject: `New Contact Form Submission from HYM Global Website`,
             html: `
                 <p>You have a new contact form submission:</p>
                 <ul>
