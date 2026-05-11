@@ -1,195 +1,80 @@
-// const fetch = require('node-fetch');
+const fetch = require('node-fetch'); // Agar error aaye tou 'npm install node-fetch' karein backend folder mein
 
-// exports.handler = async (event) => {
-//     const headers = {
-//         'Access-Control-Allow-Origin': '*',
-//         'Access-Control-Allow-Headers': 'Content-Type',
-//         'Access-Control-Allow-Methods': 'POST, OPTIONS'
-//     };
+exports.handler = async (event) => {
+    // 1. CORS Headers
+    const headers = {
+        'Access-Control-Allow-Origin': '*', // Ya 'http://localhost:5173' sirf dev ke liye
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Content-Type': 'application/json'
+    };
 
-//     if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers };
-//     if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: 'Method Not Allowed' };
-
-//     const { imageBase64, mimeType, prompt } = JSON.parse(event.body);
-
-//     try {
-//         const response = await fetch("https://api.anthropic.com/v1/messages", {
-//             method: "POST",
-//             headers: {
-//                 "Content-Type": "application/json",
-//                 "x-api-key": process.env.ANTHROPIC_API_KEY,
-//                 "anthropic-version": "2023-06-01",
-//             },
-//             body: JSON.stringify({
-//                 model: "claude-3-sonnet-20240229",
-//                 max_tokens: 3000,
-//                 messages: [{
-//                     role: "user",
-//                     content: [
-//                         { type: "image", source: { type: "base64", media_type: mimeType, data: imageBase64 } },
-//                         { type: "text", text: prompt }
-//                     ]
-//                 }]
-//             })
-//         });
-
-//         const data = await response.json();
-//         const rawText = data.content[0].text;
-//         const cleaned = rawText.replace(/```json|```/g, "").trim();
-        
-//         return {
-//             statusCode: 200,
-//             headers,
-//             body: JSON.stringify({ result: JSON.parse(cleaned) })
-//         };
-//     } catch (err) {
-//         return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
-//     }
-// };
-
-/**
- * api/design-qa.js — HYM Global Design QA Proxy
- *
- * This is a Vercel Serverless Function that proxies requests from the
- * React frontend to the Anthropic API. It keeps the API key server-side
- * so it is never exposed in the browser.
- *
- * SETUP:
- * 1. Place this file at: /api/design-qa.js (in your project root)
- * 2. Add your Anthropic API key to Vercel environment variables:
- *    Key:   ANTHROPIC_API_KEY
- *    Value: sk-ant-xxxxxxxxxxxx
- * 3. Deploy — Vercel auto-detects files in /api and makes them endpoints.
- *
- * The frontend calls: POST /api/design-qa
- * This function calls: POST https://api.anthropic.com/v1/messages
- *
- * If you are NOT using Vercel, see the Express alternative at the bottom.
- */
-
-export default async function handler(req, res) {
-  // ── CORS headers ─────────────────────────────────────────────────────────
-  // Replace * with your actual domain in production for security
-  // e.g. "https://hymglobal.co.uk"
-  res.setHeader("Access-Control-Allow-Origin", "https://hymglobal.co.uk");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  // Handle preflight
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  // ── Validate input ────────────────────────────────────────────────────────
-  const { imageBase64, mimeType, prompt } = req.body || {};
-
-  if (!imageBase64 || !mimeType || !prompt) {
-    return res.status(400).json({ error: "Missing required fields: imageBase64, mimeType, prompt" });
-  }
-
-  const allowedMimeTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"];
-  if (!allowedMimeTypes.includes(mimeType)) {
-    return res.status(400).json({ error: "Unsupported image type. Use PNG, JPG, or WEBP." });
-  }
-
-  // ── Check API key ─────────────────────────────────────────────────────────
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    console.error("ANTHROPIC_API_KEY environment variable is not set.");
-    return res.status(500).json({ error: "Server configuration error." });
-  }
-
-  // ── Call Anthropic API ────────────────────────────────────────────────────
-  try {
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 3000,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: mimeType,
-                  data: imageBase64,
-                },
-              },
-              {
-                type: "text",
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      }),
-    });
-
-    if (!anthropicRes.ok) {
-      const errBody = await anthropicRes.json().catch(() => ({}));
-      console.error("Anthropic API error:", errBody);
-      return res.status(anthropicRes.status).json({
-        error: errBody.error?.message || "Anthropic API request failed.",
-      });
+    // 2. Handle Preflight Request
+    if (event.httpMethod === 'OPTIONS') {
+        return { statusCode: 200, headers, body: 'CORS check success' };
     }
 
-    const anthropicData = await anthropicRes.json();
+    if (event.httpMethod !== 'POST') {
+        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
+    }
 
-    // Extract text from response
-    const rawText = (anthropicData.content || [])
-      .map(block => (block.type === "text" ? block.text : ""))
-      .join("");
-
-    // Strip any accidental markdown fences and parse JSON
-    const cleaned = rawText.replace(/```json|```/g, "").trim();
-
-    let parsed;
     try {
-      parsed = JSON.parse(cleaned);
-    } catch (parseErr) {
-      console.error("JSON parse error. Raw response:", rawText);
-      return res.status(500).json({ error: "Failed to parse AI response. Please try again." });
+        const body = JSON.parse(event.body);
+        const { imageBase64, mimeType, prompt } = body;
+
+        if (!imageBase64 || !mimeType || !prompt) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing fields' }) };
+        }
+
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        if (!apiKey) {
+            return { statusCode: 500, headers, body: JSON.stringify({ error: 'API key not set' }) };
+        }
+
+        // 3. Call Anthropic
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+                model: "claude-3-5-sonnet-20240620", // Latest model use karein
+                max_tokens: 3000,
+                messages: [{
+                    role: "user",
+                    content: [
+                        { type: "image", source: { type: "base64", media_type: mimeType, data: imageBase64 } },
+                        { type: "text", text: prompt }
+                    ]
+                }]
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return { statusCode: response.status, headers, body: JSON.stringify({ error: data.error?.message || 'API Fail' }) };
+        }
+
+        // Response clean karein
+        const rawText = data.content.map(b => b.text).join("");
+        const cleaned = rawText.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ result: parsed })
+        };
+
+    } catch (error) {
+        console.error("Backend Error:", error);
+        return { 
+            statusCode: 500, 
+            headers, 
+            body: JSON.stringify({ error: 'Internal Server Error', details: error.message }) 
+        };
     }
-
-    return res.status(200).json({ result: parsed });
-
-  } catch (err) {
-    console.error("Proxy fetch error:", err);
-    return res.status(500).json({ error: "Internal server error. Please try again." });
-  }
-}
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ALTERNATIVE: Express.js / Node server (if not using Vercel)
-// ═══════════════════════════════════════════════════════════════════════════
-//
-// If you're using a traditional Node/Express backend instead of Vercel,
-// replace the above export with this:
-//
-// const express = require("express");
-// const cors = require("cors");
-// const fetch = require("node-fetch"); // npm install node-fetch@2
-//
-// const app = express();
-// app.use(cors({ origin: "https://your-domain.com" })); // lock to your domain
-// app.use(express.json({ limit: "25mb" })); // needed for large base64 images
-//
-// app.post("/api/design-qa", async (req, res) => {
-//   const { imageBase64, mimeType, prompt } = req.body;
-//   // ... same logic as above handler ...
-// });
-//
-// app.listen(3001, () => console.log("Proxy running on port 3001"));
+};
