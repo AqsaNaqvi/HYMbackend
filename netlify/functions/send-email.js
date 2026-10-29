@@ -1,135 +1,4 @@
 
-// const nodemailer = require('nodemailer');
-
-// const transporter = nodemailer.createTransport({
-//     service: 'gmail',
-//     auth: {
-//         user: process.env.EMAIL_USER,
-//         pass: process.env.EMAIL_PASS
-//     }
-// });
-
-// const ALLOWED_ORIGIN = 'https://hymglobal.co.uk';
-
-// exports.handler = async (event) => {
-//     // 1. Setup CORS Headers
-//     const headers = {
-//         'Content-Type': 'application/json',
-//         'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-//         'Access-Control-Allow-Methods': 'POST, OPTIONS',
-//         'Access-Control-Allow-Headers': 'Content-Type',
-//     };
-
-//     // 2. Handle CORS Preflight
-//     if (event.httpMethod === 'OPTIONS') {
-//         return {
-//             statusCode: 200,
-//             headers,
-//             body: JSON.stringify({ message: 'CORS preflight successful' }),
-//         };
-//     }
-
-//     if (event.httpMethod !== 'POST') {
-//         return {
-//             statusCode: 405,
-//             headers,
-//             body: JSON.stringify({ message: 'Method Not Allowed' }),
-//         };
-//     }
-
-//     // 3. Parse Request Body
-//     let formData;
-//     try {
-//         formData = JSON.parse(event.body);
-//     } catch (error) {
-//         return {
-//             statusCode: 400,
-//             headers,
-//             body: JSON.stringify({ message: 'Invalid JSON' }),
-//         };
-//     }
-
-//     const { name, company, email, message, captchaToken } = formData;
-
-//     // 4. Basic Input Validation
-//     if (!name || !email || !message || !captchaToken) {
-//         return {
-//             statusCode: 400,
-//             headers,
-//             body: JSON.stringify({ message: 'Missing required fields or Captcha token.' }),
-//         };
-//     }
-
-//     try {
-//         // 5. VERIFY CAPTCHA WITH GOOGLE
-//         // We call the Google API to make sure the token sent by the frontend is valid
-//         const secretKey = process.env.RECAPTCHA_SECRET_KEY;
-//         const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${captchaToken}`;
-
-//         // Note: fetch is available globally in Node 18+ on Netlify
-//         const captchaResponse = await fetch(verifyUrl, { method: 'POST' });
-//         const captchaData = await captchaResponse.json();
-
-//         if (!captchaData.success) {
-//             console.error('Captcha verification failed:', captchaData['error-codes']);
-//             return {
-//                 statusCode: 400,
-//                 headers,
-//                 body: JSON.stringify({ message: 'Captcha validation failed. Are you a bot?' }),
-//             };
-//         }
-
-//         // 6. IF CAPTCHA SUCCESSFUL, PREPARE EMAILS
-//         const emailContent = `
-//             <p>You have a new contact form submission:</p>
-//             <ul>
-//                 <li><strong>Name:</strong> ${name}</li>
-//                 <li><strong>Company:</strong> ${company || 'N/A'}</li>
-//                 <li><strong>Email:</strong> ${email}</li>
-//                 <li><strong>Message:</strong> ${message}</li>
-//             </ul>
-//             <p><strong>Security Status:</strong> Google reCAPTCHA Verified ✅</p>
-//         `;
-
-//         let mailOptionsPrimary = {
-//             from: process.env.EMAIL_USER,
-//             to: 'info@hymglobal.co.uk',
-//             subject: `New Contact Form Submission - HYM Global`,
-//             html: emailContent,
-//             replyTo: email
-//         };
-
-//         let mailOptionsSecondary = {
-//             from: process.env.EMAIL_USER,
-//             to: 'digitalhym@gmail.com',
-//             subject: `New Contact Form Submission - HYM Global`,
-//             html: emailContent,
-//             replyTo: email
-//         };
-
-//         // 7. SEND EMAILS
-//         await transporter.sendMail(mailOptionsPrimary);
-//         await transporter.sendMail(mailOptionsSecondary);
-
-//         console.log('Captcha Verified & Emails sent successfully!');
-        
-//         return {
-//             statusCode: 200,
-//             headers,
-//             body: JSON.stringify({ message: 'Message sent successfully!' }),
-//         };
-
-//     } catch (error) {
-//         console.error('Error:', error);
-//         return {
-//             statusCode: 500,
-//             headers,
-//             body: JSON.stringify({ message: 'Internal server error.', error: error.message }),
-//         };
-//     }
-// };
-
-// my-form-backend/netlify/functions/send-email.js
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
@@ -254,6 +123,34 @@ exports.handler = async (event) => {
 
         // 7. SEND EMAIL
         await transporter.sendMail(mailOptions);
+       
+
+        // =========================================================================
+        // 🚀 NAYA: Supabase Mein Contact Lead Save Karna
+        // =========================================================================
+        try {
+            const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pzsrbgwvubnxgfnufsug.supabase.co';
+            const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+
+            if (SUPABASE_URL && SUPABASE_KEY) {
+                const { createClient } = require('@supabase/supabase-js');
+                const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+                await supabase.from('hym_contact_leads').insert([
+                    {
+                        visitor_id: formData.visitor_id || 'unknown',
+                        name: safeName,
+                        company: safeCompany,
+                        email: safeEmail,
+                        message: safeMessage
+                    }
+                ]);
+                console.log('✅ Lead saved to Supabase');
+            }
+        } catch (dbErr) {
+            console.error('Supabase lead save non-fatal error:', dbErr);
+        }
+        // =========================================================================
 
         return {
             statusCode: 200,
@@ -269,4 +166,6 @@ exports.handler = async (event) => {
             body: JSON.stringify({ message: 'Internal server error.', error: error.message }),
         };
     }
+
+    
 };
